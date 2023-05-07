@@ -22,6 +22,8 @@ enum Error {
 
 type Result<T> = std::result::Result<T, Error>;
 
+const LINK_LOCAL: Ipv6Addr = Ipv6Addr::new(0xfe80, 0, 0, 0, 0, 0, 0, 1);
+
 fn main() -> Result<()> {
     for i in 1..=4 {
         let vlan_id = i * 10;
@@ -91,7 +93,18 @@ fn send_ra_multicast(sock: &Socket, link: &str, ifi: u32) -> Result<()> {
     let all_nodes = SocketAddrV6::new(Ipv6Addr::new(0xff02, 0, 0, 0, 0, 0, 0, 1), 0, 0, ifi).into();
     let global = Ipv6Net::new(Ipv6Addr::new(0x2000, 0, 0, 0, 0, 0, 0, 0), 3).unwrap();
 
-    let mut ndp_opts = Vec::new();
+    let mut rdnss_data = [
+        0, 0, // Reserved
+        0, 0, 0x07, 0x08, // Lifetime: 1800s
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // DNS1 (inserted later)
+    ];
+    rdnss_data[6..].copy_from_slice(&LINK_LOCAL.octets());
+
+    let mut ndp_opts = vec![NdpOption {
+        option_type: NdpOptionType::new(25),
+        length: 3,
+        data: rdnss_data.to_vec(),
+    }];
     let mut prefs = Vec::new();
 
     for prefix in linkaddrs::ipv6_addresses(link.to_owned())?
@@ -127,19 +140,11 @@ fn send_ra_multicast(sock: &Socket, link: &str, ifi: u32) -> Result<()> {
         reachable_time: 0,
         retrans_time: 0,
         options: ndp_opts.clone(),
-        /*NdpOption {
-            option_type: NdpOptionType::new(25),
-            length: 3,
-            data: vec![
-                0, 0, 0xff, 0xff, 0xff, 0xff, 0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                0, 1,
-            ],
-        },*/
         payload: vec![],
     };
 
     let mut buf = Vec::new();
-    buf.resize(16 + (32 * ndp_opts.len()), 0);
+    buf.resize(16 + 24 + 32 * (ndp_opts.len() - 1), 0);
 
     let mut pkt = MutableRouterAdvertPacket::new(&mut buf).unwrap();
     pkt.populate(&adv);
