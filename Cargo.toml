@@ -3,6 +3,7 @@ name = "rsdsl_radvd"
 version = "0.1.0"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
+pnet_packet = "0.33.0"
+rsdsl_netlinkd = { git = "https://github.com/rsdsl/netlinkd.git", version = "0.3.0" }
+socket2 = { version = "0.5.2", features = ["all"] }
