@@ -154,7 +154,7 @@ fn send_ra_multicast(sock: &Socket, link: &str, ifi: u32) -> Result<()> {
     let prefixes = prefs
         .into_iter()
         .map(|prefix| format!("{}", prefix))
-        .reduce(|acc, prefix| acc + &prefix)
+        .reduce(|acc, prefix| acc + ", " + &prefix)
         .unwrap_or(String::from("::/64"));
 
     println!("[radvd] send multicast nd-ra {} on {}", prefixes, link);
