@@ -212,6 +212,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "ipnet"
+version = "2.7.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "12b6ee2129af8d4fb011108c73d99a1b83a85977f23b82460c0ae2e25bb4b57f"
+
+[[package]]
 name = "itoa"
 version = "1.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -242,6 +248,18 @@ name = "libc"
 version = "0.2.143"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "edc207893e85c5d6be840e969b496b53d94cec8be2d501b214f50daa97fa8024"
+
+[[package]]
+name = "linkaddrs"
+version = "0.1.0"
+source = "git+https://github.com/HimbeerserverDE/linkaddrs.git#412f8341bc1631acdae5ded45e53a23d93477e63"
+dependencies = [
+ "futures",
+ "ipnet",
+ "netlink-packet-route",
+ "rtnetlink",
+ "tokio",
+]
 
 [[package]]
 name = "log"
@@ -513,9 +531,12 @@ dependencies = [
 name = "rsdsl_radvd"
 version = "0.1.0"
 dependencies = [
+ "ipnet",
+ "linkaddrs",
  "pnet_packet",
  "rsdsl_netlinkd",
  "socket2 0.5.2",
+ "thiserror",
 ]
 
 [[package]]
