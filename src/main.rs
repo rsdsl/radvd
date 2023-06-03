@@ -31,7 +31,7 @@ fn main() -> Result<()> {
 
         thread::spawn(move || match run(vlan_name.clone()) {
             Ok(_) => {}
-            Err(e) => println!("[radvd] can't init {}: {}", vlan_name, e),
+            Err(e) => println!("can't init {}: {}", vlan_name, e),
         });
     }
 
@@ -40,11 +40,11 @@ fn main() -> Result<()> {
 }
 
 fn run(link: String) -> Result<()> {
-    println!("[radvd] wait for {}", link);
+    println!("wait for {}", link);
     link::wait_up(link.clone())?;
     thread::sleep(Duration::from_secs(1));
 
-    println!("[radvd] init {}", link);
+    println!("init {}", link);
 
     let ifi = link::index(link.clone())?;
 
@@ -60,10 +60,7 @@ fn run(link: String) -> Result<()> {
     thread::spawn(move || loop {
         match send_ra_multicast(&sock2, &link2, ifi) {
             Ok(_) => {}
-            Err(e) => println!(
-                "[radvd] warning: can't send ra multicast on {}: {}",
-                link2, e
-            ),
+            Err(e) => println!("warning: can't send ra multicast on {}: {}", link2, e),
         }
 
         thread::sleep(Duration::from_secs(1200));
@@ -76,14 +73,11 @@ fn run(link: String) -> Result<()> {
 
         // Router Solicitation
         if buf[0] == 133 {
-            println!("[radvd] recv nd-rs on {}", link);
+            println!("recv nd-rs on {}", link);
 
             match send_ra_multicast(&sock, &link, ifi) {
                 Ok(_) => {}
-                Err(e) => println!(
-                    "[radvd] warning: can't send ra multicast on {}: {}",
-                    link, e
-                ),
+                Err(e) => println!("warning: can't send ra multicast on {}: {}", link, e),
             }
         }
     }
@@ -157,6 +151,6 @@ fn send_ra_multicast(sock: &Socket, link: &str, ifi: u32) -> Result<()> {
         .reduce(|acc, prefix| acc + ", " + &prefix)
         .unwrap_or(String::from("::/64"));
 
-    println!("[radvd] send multicast nd-ra {} on {}", prefixes, link);
+    println!("send multicast nd-ra {} on {}", prefixes, link);
     Ok(())
 }
