@@ -7,6 +7,6 @@ edition = "2021"
 ipnet = "2.7.1"
 linkaddrs = { git = "https://github.com/HimbeerserverDE/linkaddrs.git", version = "0.1.0" }
 pnet_packet = "0.33.0"
-rsdsl_netlinkd = { git = "https://github.com/rsdsl/netlinkd.git", version = "0.5.0" }
+rsdsl_netlinkd = { git = "https://github.com/rsdsl/netlinkd.git", version = "0.6.0" }
 socket2 = { version = "0.5.2", features = ["all"] }
 thiserror = "1.0"
