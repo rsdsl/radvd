@@ -14,6 +14,7 @@ use thiserror::Error;
 enum Error {
     #[error("io: {0}")]
     Io(#[from] io::Error),
+
     #[error("linkaddrs: {0}")]
     LinkAddrs(#[from] linkaddrs::Error),
     #[error("rsdsl_netlinkd: {0}")]
@@ -29,18 +30,23 @@ fn main() -> Result<()> {
         let vlan_id = i * 10;
         let vlan_name = format!("eth0.{}", vlan_id);
 
-        thread::spawn(move || match run(vlan_name.clone()) {
-            Ok(_) => {}
-            Err(e) => println!("can't init {}: {}", vlan_name, e),
-        });
+        thread::spawn(move || run_supervised(vlan_name));
     }
 
-    run("eth0".into())?;
-    Ok(())
+    run_supervised("eth0".into());
+}
+
+fn run_supervised(link: String) -> ! {
+    loop {
+        match run(link.clone()) {
+            Ok(_) => {}
+            Err(e) => println!("[warn] error on {}: {}", link, e),
+        }
+    }
 }
 
 fn run(link: String) -> Result<()> {
-    println!("wait for {}", link);
+    println!("[info] wait for {}", link);
     link::wait_up(link.clone())?;
     thread::sleep(Duration::from_secs(1));
 
@@ -60,7 +66,7 @@ fn run(link: String) -> Result<()> {
     thread::spawn(move || loop {
         match send_ra_multicast(&sock2, &link2, ifi) {
             Ok(_) => {}
-            Err(e) => println!("warning: can't send ra multicast on {}: {}", link2, e),
+            Err(e) => println!("[warn] multicast ra {}: {}", link2, e),
         }
 
         thread::sleep(Duration::from_secs(1200));
@@ -73,11 +79,11 @@ fn run(link: String) -> Result<()> {
 
         // Router Solicitation
         if buf[0] == 133 {
-            println!("recv nd-rs on {}", link);
+            println!("[info] recv rs {}", link);
 
             match send_ra_multicast(&sock, &link, ifi) {
                 Ok(_) => {}
-                Err(e) => println!("warning: can't send ra multicast on {}: {}", link, e),
+                Err(e) => println!("[warn] multicast ra {}: {}", link, e),
             }
         }
     }
@@ -151,6 +157,6 @@ fn send_ra_multicast(sock: &Socket, link: &str, ifi: u32) -> Result<()> {
         .reduce(|acc, prefix| acc + ", " + &prefix)
         .unwrap_or(String::from("::/64"));
 
-    println!("send multicast nd-ra {} on {}", prefixes, link);
+    println!("[info] multicast ra {} net {}", link, prefixes);
     Ok(())
 }
