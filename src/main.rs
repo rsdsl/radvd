@@ -8,6 +8,7 @@ use ipnet::Ipv6Net;
 use pnet_packet::icmpv6::ndp::{MutableRouterAdvertPacket, NdpOption, NdpOptionType, RouterAdvert};
 use pnet_packet::icmpv6::{Icmpv6Code, Icmpv6Type};
 use rsdsl_netlinkd::link;
+use signal_hook::{consts::SIGUSR1, iterator::Signals};
 use socket2::{Domain, Protocol, SockAddr, Socket, Type};
 use thiserror::Error;
 
@@ -74,6 +75,22 @@ fn run(link: String) -> Result<()> {
         }
 
         thread::sleep(Duration::from_secs(1200));
+    });
+
+    // Send NDP RAs when SIGUSR1 is received.
+    // This updates the prefixes whenever netlinkd informs us of a change.
+    let sock2 = sock.try_clone()?;
+    let link2 = link.clone();
+    thread::spawn(move || match Signals::new([SIGUSR1]) {
+        Ok(mut signals) => {
+            for _ in signals.forever() {
+                match send_ra_multicast(&sock2, link2.clone(), ifi) {
+                    Ok(_) => {}
+                    Err(e) => println!("[warn] sig multicast ra {}: {}", link2, e),
+                }
+            }
+        }
+        Err(e) => println!("[warn] no signal handling on {}: {}", link2, e),
     });
 
     loop {
