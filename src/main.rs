@@ -1,4 +1,5 @@
-use std::io::{self, Read};
+use std::io;
+use std::mem::MaybeUninit;
 use std::net::{Ipv6Addr, SocketAddrV6};
 use std::thread;
 use std::time::Duration;
@@ -7,11 +8,14 @@ use ipnet::Ipv6Net;
 use pnet_packet::icmpv6::ndp::{MutableRouterAdvertPacket, NdpOption, NdpOptionType, RouterAdvert};
 use pnet_packet::icmpv6::{Icmpv6Code, Icmpv6Type};
 use rsdsl_netlinkd::link;
-use socket2::{Domain, Protocol, Socket, Type};
+use socket2::{Domain, Protocol, SockAddr, Socket, Type};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
 enum Error {
+    #[error("sockaddr is not an ipv6 address")]
+    SockAddrNotIpv6,
+
     #[error("io: {0}")]
     Io(#[from] io::Error),
 
@@ -54,7 +58,7 @@ fn run(link: String) -> Result<()> {
 
     let ifi = link::index(link.clone())?;
 
-    let mut sock = Socket::new(Domain::IPV6, Type::RAW, Some(Protocol::ICMPV6))?;
+    let sock = Socket::new(Domain::IPV6, Type::RAW, Some(Protocol::ICMPV6))?;
 
     sock.join_multicast_v6(&Ipv6Addr::new(0xff02, 0, 0, 0, 0, 0, 0, 2), ifi)?;
     sock.set_multicast_hops_v6(255)?;
@@ -64,7 +68,7 @@ fn run(link: String) -> Result<()> {
     let sock2 = sock.try_clone()?;
     let link2 = link.clone();
     thread::spawn(move || loop {
-        match send_ra_multicast(&sock2, &link2, ifi) {
+        match send_ra_multicast(&sock2, link2.clone(), ifi) {
             Ok(_) => {}
             Err(e) => println!("[warn] multicast ra {}: {}", link2, e),
         }
@@ -72,25 +76,33 @@ fn run(link: String) -> Result<()> {
         thread::sleep(Duration::from_secs(1200));
     });
 
-    let mut buf = [0; 1500];
     loop {
-        let n = sock.read(&mut buf)?;
+        let mut buf = [MaybeUninit::new(0); 1500];
+        let (n, raddr) = sock.recv_from(&mut buf)?;
+
+        // See unstable `MaybeUninit::slice_assume_init_ref`.
+        let buf = unsafe { &*(&buf as *const [MaybeUninit<u8>] as *const [u8]) };
+
         let buf = &buf[..n];
 
         // Router Solicitation
         if buf[0] == 133 {
             println!("[info] recv rs {}", link);
 
-            match send_ra_multicast(&sock, &link, ifi) {
+            match send_ra_unicast(&sock, link.clone(), &raddr) {
                 Ok(_) => {}
-                Err(e) => println!("[warn] multicast ra {}: {}", link, e),
+                Err(e) => println!(
+                    "[warn] unicast ra {} to {}: {}",
+                    link,
+                    raddr.as_socket_ipv6().ok_or(Error::SockAddrNotIpv6)?.ip(),
+                    e
+                ),
             }
         }
     }
 }
 
-fn send_ra_multicast(sock: &Socket, link: &str, ifi: u32) -> Result<()> {
-    let all_nodes = SocketAddrV6::new(Ipv6Addr::new(0xff02, 0, 0, 0, 0, 0, 0, 1), 0, 0, ifi).into();
+fn create_ra_pkt(link: String) -> Result<(Vec<u8>, Vec<Ipv6Net>)> {
     let global = Ipv6Net::new(Ipv6Addr::new(0x2000, 0, 0, 0, 0, 0, 0, 0), 3).unwrap();
 
     let mut rdnss_data = [
@@ -105,9 +117,9 @@ fn send_ra_multicast(sock: &Socket, link: &str, ifi: u32) -> Result<()> {
         length: 3,
         data: rdnss_data.to_vec(),
     }];
-    let mut prefs = Vec::new();
+    let mut prefixes = Vec::new();
 
-    for prefix in linkaddrs::ipv6_addresses(link.to_owned())?
+    for prefix in linkaddrs::ipv6_addresses(link)?
         .into_iter()
         .filter(|addr| global.contains(addr))
     {
@@ -121,7 +133,7 @@ fn send_ra_multicast(sock: &Socket, link: &str, ifi: u32) -> Result<()> {
         ];
         prefix_data[14..].copy_from_slice(&prefix.trunc().addr().octets());
 
-        prefs.push(prefix);
+        prefixes.push(prefix);
 
         ndp_opts.push(NdpOption {
             option_type: NdpOptionType::new(3),
@@ -149,14 +161,40 @@ fn send_ra_multicast(sock: &Socket, link: &str, ifi: u32) -> Result<()> {
     let mut pkt = MutableRouterAdvertPacket::new(&mut buf).unwrap();
     pkt.populate(&adv);
 
-    sock.send_to(&buf, &all_nodes)?;
+    Ok((buf, prefixes))
+}
 
-    let prefixes = prefs
+fn send_ra_multicast(sock: &Socket, link: String, ifi: u32) -> Result<()> {
+    let all_nodes = SocketAddrV6::new(Ipv6Addr::new(0xff02, 0, 0, 0, 0, 0, 0, 1), 0, 0, ifi).into();
+
+    let (pkt, pkt_prefixes) = create_ra_pkt(link.clone())?;
+    sock.send_to(&pkt, &all_nodes)?;
+
+    let prefixes = pkt_prefixes
         .into_iter()
         .map(|prefix| format!("{}", prefix))
         .reduce(|acc, prefix| acc + ", " + &prefix)
         .unwrap_or(String::from("::/64"));
 
     println!("[info] multicast ra {} net {}", link, prefixes);
+    Ok(())
+}
+
+fn send_ra_unicast(sock: &Socket, link: String, raddr: &SockAddr) -> Result<()> {
+    let (pkt, pkt_prefixes) = create_ra_pkt(link.clone())?;
+    sock.send_to(&pkt, raddr)?;
+
+    let prefixes = pkt_prefixes
+        .into_iter()
+        .map(|prefix| format!("{}", prefix))
+        .reduce(|acc, prefix| acc + ", " + &prefix)
+        .unwrap_or(String::from("::/64"));
+
+    println!(
+        "[info] unicast ra {} to {} net {}",
+        link,
+        raddr.as_socket_ipv6().ok_or(Error::SockAddrNotIpv6)?.ip(),
+        prefixes
+    );
     Ok(())
 }
