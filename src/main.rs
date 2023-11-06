@@ -23,7 +23,7 @@ enum Error {
     #[error("linkaddrs: {0}")]
     LinkAddrs(#[from] linkaddrs::Error),
     #[error("rsdsl_netlinkd: {0}")]
-    RsdslNetlinkd(#[from] rsdsl_netlinkd::error::Error),
+    RsdslNetlinkd(#[from] rsdsl_netlinkd::Error),
 }
 
 type Result<T> = std::result::Result<T, Error>;
