@@ -74,7 +74,7 @@ fn run(link: String) -> Result<()> {
             Err(e) => println!("[warn] multicast ra {}: {}", link2, e),
         }
 
-        thread::sleep(Duration::from_secs(1200));
+        thread::sleep(Duration::from_secs(120));
     });
 
     // Send NDP RAs when SIGUSR1 is received.
