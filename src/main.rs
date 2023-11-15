@@ -7,7 +7,7 @@ use std::time::Duration;
 use ipnet::Ipv6Net;
 use pnet_packet::icmpv6::ndp::{MutableRouterAdvertPacket, NdpOption, NdpOptionType, RouterAdvert};
 use pnet_packet::icmpv6::{Icmpv6Code, Icmpv6Type};
-use rsdsl_netlinkd::link;
+use rsdsl_netlinklib::blocking::link;
 use signal_hook::{consts::SIGUSR1, iterator::Signals};
 use socket2::{Domain, Protocol, SockAddr, Socket, Type};
 use thiserror::Error;
@@ -22,8 +22,8 @@ enum Error {
 
     #[error("linkaddrs: {0}")]
     LinkAddrs(#[from] linkaddrs::Error),
-    #[error("rsdsl_netlinkd: {0}")]
-    RsdslNetlinkd(#[from] rsdsl_netlinkd::Error),
+    #[error("netlinklib error: {0}")]
+    Netlinklib(#[from] rsdsl_netlinklib::Error),
 }
 
 type Result<T> = std::result::Result<T, Error>;
