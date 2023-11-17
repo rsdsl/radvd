@@ -1,13 +1,13 @@
 use std::io;
 use std::mem::MaybeUninit;
-use std::net::{Ipv6Addr, SocketAddrV6};
+use std::net::{IpAddr, Ipv6Addr, SocketAddrV6};
 use std::thread;
 use std::time::Duration;
 
 use ipnet::Ipv6Net;
 use pnet_packet::icmpv6::ndp::{MutableRouterAdvertPacket, NdpOption, NdpOptionType, RouterAdvert};
 use pnet_packet::icmpv6::{Icmpv6Code, Icmpv6Type};
-use rsdsl_netlinklib::blocking::link;
+use rsdsl_netlinklib::blocking::{addr, link};
 use signal_hook::{consts::SIGUSR1, iterator::Signals};
 use socket2::{Domain, Protocol, SockAddr, Socket, Type};
 use thiserror::Error;
@@ -20,8 +20,6 @@ enum Error {
     #[error("io: {0}")]
     Io(#[from] io::Error),
 
-    #[error("linkaddrs: {0}")]
-    LinkAddrs(#[from] linkaddrs::Error),
     #[error("netlinklib error: {0}")]
     Netlinklib(#[from] rsdsl_netlinklib::Error),
 }
@@ -119,7 +117,7 @@ fn run(link: String) -> Result<()> {
     }
 }
 
-fn create_ra_pkt(link: String) -> Result<(Vec<u8>, Vec<Ipv6Net>)> {
+fn create_ra_pkt(link: String) -> Result<(Vec<u8>, Vec<Ipv6Addr>)> {
     let global = Ipv6Net::new(Ipv6Addr::new(0x2000, 0, 0, 0, 0, 0, 0, 0), 3).unwrap();
 
     let mut rdnss_data = [
@@ -136,10 +134,15 @@ fn create_ra_pkt(link: String) -> Result<(Vec<u8>, Vec<Ipv6Net>)> {
     }];
     let mut prefixes = Vec::new();
 
-    for prefix in linkaddrs::ipv6_addresses(link)?
-        .into_iter()
-        .filter(|addr| global.contains(addr))
-    {
+    let ipv6_addrs = addr::get(link)?.into_iter().filter_map(|addr| {
+        if let IpAddr::V6(v6) = addr {
+            Some(v6)
+        } else {
+            None
+        }
+    });
+
+    for prefix in ipv6_addrs.filter(|addr| global.contains(addr)) {
         let mut prefix_data = [
             64,   // Prefix Length, always /64
             0xc0, // Flags: On-Link + SLAAC
@@ -148,7 +151,7 @@ fn create_ra_pkt(link: String) -> Result<(Vec<u8>, Vec<Ipv6Net>)> {
             0, 0, 0, 0, // Reserved
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // Prefix (inserted later)
         ];
-        prefix_data[14..].copy_from_slice(&prefix.trunc().addr().octets());
+        prefix_data[14..].copy_from_slice(&prefix.octets());
 
         prefixes.push(prefix);
 
@@ -189,7 +192,7 @@ fn send_ra_multicast(sock: &Socket, link: String, ifi: u32) -> Result<()> {
 
     let prefixes = pkt_prefixes
         .into_iter()
-        .map(|prefix| format!("{}", prefix))
+        .map(|prefix| format!("{}/64", prefix))
         .reduce(|acc, prefix| acc + ", " + &prefix)
         .unwrap_or(String::from("::/64"));
 
@@ -203,7 +206,7 @@ fn send_ra_unicast(sock: &Socket, link: String, raddr: &SockAddr) -> Result<()> 
 
     let prefixes = pkt_prefixes
         .into_iter()
-        .map(|prefix| format!("{}", prefix))
+        .map(|prefix| format!("{}/64", prefix))
         .reduce(|acc, prefix| acc + ", " + &prefix)
         .unwrap_or(String::from("::/64"));
 
