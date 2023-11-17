@@ -4,7 +4,6 @@ use std::net::{IpAddr, Ipv6Addr, SocketAddrV6};
 use std::thread;
 use std::time::Duration;
 
-use ipnet::Ipv6Net;
 use pnet_packet::icmpv6::ndp::{MutableRouterAdvertPacket, NdpOption, NdpOptionType, RouterAdvert};
 use pnet_packet::icmpv6::{Icmpv6Code, Icmpv6Type};
 use rsdsl_netlinklib::blocking::{addr, link};
@@ -118,8 +117,6 @@ fn run(link: String) -> Result<()> {
 }
 
 fn create_ra_pkt(link: String) -> Result<(Vec<u8>, Vec<Ipv6Addr>)> {
-    let global = Ipv6Net::new(Ipv6Addr::new(0x2000, 0, 0, 0, 0, 0, 0, 0), 3).unwrap();
-
     let mut rdnss_data = [
         0, 0, // Reserved
         0, 0, 0x07, 0x08, // Lifetime: 1800s
@@ -142,7 +139,7 @@ fn create_ra_pkt(link: String) -> Result<(Vec<u8>, Vec<Ipv6Addr>)> {
         }
     });
 
-    for prefix in ipv6_addrs.filter(|addr| global.contains(addr)) {
+    for prefix in ipv6_addrs.filter(is_gua) {
         let mut prefix_data = [
             64,   // Prefix Length, always /64
             0xc0, // Flags: On-Link + SLAAC
@@ -217,4 +214,10 @@ fn send_ra_unicast(sock: &Socket, link: String, raddr: &SockAddr) -> Result<()> 
         prefixes
     );
     Ok(())
+}
+
+/// Checks whether an IPv6 address is part of the `2000::/3` network.
+fn is_gua(addr: &Ipv6Addr) -> bool {
+    let first_octet_trunc = addr.octets()[0] & 0xe0;
+    first_octet_trunc == 0x20
 }
