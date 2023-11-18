@@ -63,7 +63,9 @@ fn run(link: String) -> Result<()> {
     sock.bind_device(Some(link.as_bytes()))?;
 
     sock.join_multicast_v6(&Ipv6Addr::new(0xff02, 0, 0, 0, 0, 0, 0, 2), ifi)?;
+
     sock.set_multicast_hops_v6(255)?;
+    sock.set_unicast_hops_v6(255)?;
 
     // Periodically send NDP RAs so SLAAC addresses don't expire.
     // The interval is five minutes shorter than the preferred lifetime.
