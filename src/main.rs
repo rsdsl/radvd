@@ -60,6 +60,8 @@ fn run(link: String) -> Result<()> {
 
     let sock = Socket::new(Domain::IPV6, Type::RAW, Some(Protocol::ICMPV6))?;
 
+    sock.bind_device(Some(link.as_bytes()))?;
+
     sock.join_multicast_v6(&Ipv6Addr::new(0xff02, 0, 0, 0, 0, 0, 0, 2), ifi)?;
     sock.set_multicast_hops_v6(255)?;
 
