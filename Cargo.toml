@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 pnet_packet = "0.33.0"
-rsdsl_netlinklib = { git = "https://github.com/rsdsl/netlinklib.git", version = "0.4.4", features = ["addr", "blocking", "status"], default-features = false }
+rsdsl_netlinklib = { git = "https://github.com/rsdsl/netlinklib.git", version = "0.4.5", features = ["addr", "blocking", "status"], default-features = false }
 signal-hook = "0.3.17"
 socket2 = { version = "0.5.2", features = ["all"] }
 thiserror = "1.0"
