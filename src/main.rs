@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use pnet_packet::icmpv6::ndp::{MutableRouterAdvertPacket, NdpOption, NdpOptionType, RouterAdvert};
 use pnet_packet::icmpv6::{Icmpv6Code, Icmpv6Type};
-use rsdsl_netlinklib::blocking::{addr, link};
+use rsdsl_netlinklib::blocking::Connection;
 use signal_hook::{consts::SIGUSR1, iterator::Signals};
 use socket2::{Domain, Protocol, SockAddr, Socket, Type};
 use thiserror::Error;
@@ -48,13 +48,15 @@ fn run_supervised(link: String) -> ! {
 }
 
 fn run(link: String) -> Result<()> {
+    let conn = Connection::new()?;
+
     println!("[info] wait for {}", link);
-    link::wait_up(link.clone())?;
+    conn.link_wait_up(link.clone())?;
     thread::sleep(Duration::from_secs(1));
 
     println!("init {}", link);
 
-    let ifi = link::index(link.clone())?;
+    let ifi = conn.link_index(link.clone())?;
 
     let sock = Socket::new(Domain::IPV6, Type::RAW, Some(Protocol::ICMPV6))?;
 
@@ -117,6 +119,8 @@ fn run(link: String) -> Result<()> {
 }
 
 fn create_ra_pkt(link: String) -> Result<(Vec<u8>, Vec<Ipv6Addr>)> {
+    let conn = Connection::new()?;
+
     let mut rdnss_data = [
         0, 0, // Reserved
         0, 0, 0x07, 0x08, // Lifetime: 1800s
@@ -131,7 +135,7 @@ fn create_ra_pkt(link: String) -> Result<(Vec<u8>, Vec<Ipv6Addr>)> {
     }];
     let mut prefixes = Vec::new();
 
-    let ipv6_addrs = addr::get(link)?.into_iter().filter_map(|addr| {
+    let ipv6_addrs = conn.address_get(link)?.into_iter().filter_map(|addr| {
         if let IpAddr::V6(v6) = addr {
             Some(v6)
         } else {
