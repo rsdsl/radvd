@@ -54,7 +54,7 @@ fn run(link: String) -> Result<()> {
     conn.link_wait_up(link.clone())?;
     thread::sleep(Duration::from_secs(1));
 
-    println!("init {}", link);
+    println!("[info] init {}", link);
 
     let ifi = conn.link_index(link.clone())?;
 
