@@ -180,8 +180,7 @@ fn create_ra_pkt(link: String) -> Result<(Vec<u8>, Vec<Ipv6Addr>)> {
         payload: vec![],
     };
 
-    let mut buf = Vec::new();
-    buf.resize(16 + 24 + 32 * (ndp_opts.len() - 1), 0);
+    let mut buf = vec![0; 16 + 24 + 32 * (ndp_opts.len() - 1)];
 
     let mut pkt = MutableRouterAdvertPacket::new(&mut buf).unwrap();
     pkt.populate(&adv);
