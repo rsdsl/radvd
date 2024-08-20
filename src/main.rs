@@ -147,7 +147,7 @@ fn create_ra_pkt(link: String) -> Result<(Vec<u8>, Vec<Ipv6Addr>)> {
         }
     });
 
-    for prefix in ipv6_addrs.filter(is_gua) {
+    for prefix in ipv6_addrs.filter(|addr| is_gua(addr) || is_ula(addr)) {
         let mut prefix_data = [
             64,   // Prefix Length, always /64
             0xc0, // Flags: On-Link + SLAAC
@@ -228,4 +228,11 @@ fn send_ra_unicast(sock: &Socket, link: String, raddr: &SockAddr) -> Result<()> 
 fn is_gua(addr: &Ipv6Addr) -> bool {
     let first_octet_trunc = addr.octets()[0] & 0xe0;
     first_octet_trunc == 0x20
+}
+
+/// Checks whether an IPv6 address is part of the `fc00::/7` network.
+fn is_ula(addr: &Ipv6Addr) -> bool {
+    // Stable implementation of [`Ipv6Addr::is_unique_local`].
+    // Tracking issue: https://github.com/rust-lang/rust/issues/27709 for
+    (addr.segments()[0] & 0xfe00) == 0xfc00
 }
