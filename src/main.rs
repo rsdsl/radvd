@@ -11,6 +11,9 @@ use signal_hook::{consts::SIGUSR1, iterator::Signals};
 use socket2::{Domain, Protocol, SockAddr, Socket, Type};
 use thiserror::Error;
 
+const PI_PREFIX: u128 = 0x200106780b2400000000000000000000;
+const PI_MASK: u128 = 0xffffffffffff00000000000000000000;
+
 #[derive(Debug, Error)]
 enum Error {
     #[error("sockaddr is not an ipv6 address")]
@@ -147,7 +150,7 @@ fn create_ra_pkt(link: String) -> Result<(Vec<u8>, Vec<Ipv6Addr>)> {
         }
     });
 
-    for prefix in ipv6_addrs.filter(|addr| is_gua(addr) || is_ula(addr)) {
+    for prefix in ipv6_addrs.filter(should_advertise) {
         let mut prefix_data = [
             64,   // Prefix Length, always /64
             0xc0, // Flags: On-Link + SLAAC
@@ -234,4 +237,14 @@ fn is_ula(addr: &Ipv6Addr) -> bool {
     // Stable implementation of [`Ipv6Addr::is_unique_local`].
     // Tracking issue: https://github.com/rust-lang/rust/issues/27709 for
     (addr.segments()[0] & 0xfe00) == 0xfc00
+}
+
+/// Checks whether an IPv6 address is part of the network's PI prefix.
+fn is_pi(addr: &Ipv6Addr) -> bool {
+    addr.to_bits() & PI_MASK == PI_PREFIX
+}
+
+/// Checks whether an IPv6 subnet address should be advertised.
+fn should_advertise(addr: &Ipv6Addr) -> bool {
+    (is_gua(addr) || is_ula(addr)) && !is_pi(addr)
 }
