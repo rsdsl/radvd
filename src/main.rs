@@ -45,7 +45,7 @@ fn run_supervised(link: String) -> ! {
     loop {
         match run(link.clone()) {
             Ok(_) => {}
-            Err(e) => println!("[warn] error on {}: {}", link, e),
+            Err(e) => eprintln!("[warn] error on {}: {}", link, e),
         }
     }
 }
@@ -53,11 +53,11 @@ fn run_supervised(link: String) -> ! {
 fn run(link: String) -> Result<()> {
     let conn = Connection::new()?;
 
-    println!("[info] wait for {}", link);
+    eprintln!("[info] wait for {}", link);
     conn.link_wait_up(link.clone())?;
     thread::sleep(Duration::from_secs(1));
 
-    println!("[info] init {}", link);
+    eprintln!("[info] init {}", link);
 
     let ifi = conn.link_index(link.clone())?;
 
@@ -77,7 +77,7 @@ fn run(link: String) -> Result<()> {
     thread::spawn(move || loop {
         match send_ra_multicast(&sock2, link2.clone(), ifi) {
             Ok(_) => {}
-            Err(e) => println!("[warn] multicast ra {}: {}", link2, e),
+            Err(e) => eprintln!("[warn] multicast ra {}: {}", link2, e),
         }
 
         thread::sleep(Duration::from_secs(120));
@@ -92,11 +92,11 @@ fn run(link: String) -> Result<()> {
             for _ in signals.forever() {
                 match send_ra_multicast(&sock2, link2.clone(), ifi) {
                     Ok(_) => {}
-                    Err(e) => println!("[warn] sig multicast ra {}: {}", link2, e),
+                    Err(e) => eprintln!("[warn] sig multicast ra {}: {}", link2, e),
                 }
             }
         }
-        Err(e) => println!("[warn] no signal handling on {}: {}", link2, e),
+        Err(e) => eprintln!("[warn] no signal handling on {}: {}", link2, e),
     });
 
     loop {
@@ -110,11 +110,11 @@ fn run(link: String) -> Result<()> {
 
         // Router Solicitation
         if buf[0] == 133 {
-            println!("[info] recv rs {}", link);
+            eprintln!("[info] recv rs {}", link);
 
             match send_ra_unicast(&sock, link.clone(), &raddr) {
                 Ok(_) => {}
-                Err(e) => println!(
+                Err(e) => eprintln!(
                     "[warn] unicast ra {} to {}: {}",
                     link,
                     raddr.as_socket_ipv6().ok_or(Error::SockAddrNotIpv6)?.ip(),
@@ -203,7 +203,7 @@ fn send_ra_multicast(sock: &Socket, link: String, ifi: u32) -> Result<()> {
         .reduce(|acc, prefix| acc + ", " + &prefix)
         .unwrap_or(String::from("::/64"));
 
-    println!("[info] multicast ra {} net {}", link, prefixes);
+    eprintln!("[info] multicast ra {} net {}", link, prefixes);
     Ok(())
 }
 
@@ -217,7 +217,7 @@ fn send_ra_unicast(sock: &Socket, link: String, raddr: &SockAddr) -> Result<()> 
         .reduce(|acc, prefix| acc + ", " + &prefix)
         .unwrap_or(String::from("::/64"));
 
-    println!(
+    eprintln!(
         "[info] unicast ra {} to {} net {}",
         link,
         raddr.as_socket_ipv6().ok_or(Error::SockAddrNotIpv6)?.ip(),
